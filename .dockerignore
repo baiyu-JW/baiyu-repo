@@ -1,0 +1,24 @@
+# 版本控制与 IDE
+.git
+.idea
+.gitignore
+
+# 测试与构建产物
+tests/
+report.html
+.phpunit.result_cache
+
+# 文档与无关文件
+README.md
+renamed.md
+*.md
+
+# 日志样例与考核文档（非镜像运行必需）
+access.log
+*.jsonl
+AI开发考核_唐锦玉_日志分析工具.jsonl
+tatus
+
+# Docker 自身
+Dockerfile
+.dockerignore
