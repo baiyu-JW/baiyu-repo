@@ -1,0 +1,138 @@
+[33mcommit 51f84d20d505899bc0b5561eb6635e2edec0680c[m
+Author: 唐锦玉 <3536733717@qq.com>
+Date:   Thu Jul 9 00:52:29 2026 +0800
+
+    V1: AI生成基础日志分析工具，支持统计总请求数、状态码分布、Top 10 IP
+
+[1mdiff --git a/analyze.php b/analyze.php[m
+[1mnew file mode 100644[m
+[1mindex 0000000..1ad656c[m
+[1m--- /dev/null[m
+[1m+++ b/analyze.php[m
+[36m@@ -0,0 +1,126 @@[m
+[32m+[m[32m<?php[m
+[32m+[m
+[32m+[m[32m/**[m
+[32m+[m[32m * Nginx access.log 分析工具[m
+[32m+[m[32m * 用法: php analyze.php [access.log 路径][m
+[32m+[m[32m * 默认读取当前目录下的 access.log[m
+[32m+[m[32m */[m
+[32m+[m
+[32m+[m[32m$logFile = $argv[1] ?? __DIR__ . DIRECTORY_SEPARATOR . 'access.log';[m
+[32m+[m
+[32m+[m[32mif (!file_exists($logFile)) {[m
+[32m+[m[32m    fwrite(STDERR, "错误: 日志文件不存在: {$logFile}\n");[m
+[32m+[m[32m    exit(1);[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m$totalRequests = 0;[m
+[32m+[m[32m$statusCodes = [];[m
+[32m+[m[32m$ipCounts = [];[m
+[32m+[m
+[32m+[m[32m$handle = fopen($logFile, 'r');[m
+[32m+[m[32mif (!$handle) {[m
+[32m+[m[32m    fwrite(STDERR, "错误: 无法打开文件: {$logFile}\n");[m
+[32m+[m[32m    exit(1);[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mwhile (($line = fgets($handle)) !== false) {[m
+[32m+[m[32m    $line = trim($line);[m
+[32m+[m[32m    if ($line === '') {[m
+[32m+[m[32m        continue;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    $totalRequests++;[m
+[32m+[m
+[32m+[m[32m    $matches = [];[m
+[32m+[m[32m    if (preg_match('/^(\S+)\s+.*?"\S+\s+\S+\s+\S+"\s+(\d{3})\s+/', $line, $matches)) {[m
+[32m+[m[32m        $ip = $matches[1];[m
+[32m+[m[32m        $status = (int)$matches[2];[m
+[32m+[m
+[32m+[m[32m        if (!isset($statusCodes[$status])) {[m
+[32m+[m[32m            $statusCodes[$status] = 0;[m
+[32m+[m[32m        }[m
+[32m+[m[32m        $statusCodes[$status]++;[m
+[32m+[m
+[32m+[m[32m        if (!isset($ipCounts[$ip])) {[m
+[32m+[m[32m            $ipCounts[$ip] = 0;[m
+[32m+[m[32m        }[m
+[32m+[m[32m        $ipCounts[$ip]++;[m
+[32m+[m[32m    }[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mfclose($handle);[m
+[32m+[m
+[32m+[m[32marsort($ipCounts);[m
+[32m+[m[32m$topIps = array_slice($ipCounts, 0, 10, true);[m
+[32m+[m
+[32m+[m[32mfunction drawBorder($widths) {[m
+[32m+[m[32m    $line = '+';[m
+[32m+[m[32m    foreach ($widths as $w) {[m
+[32m+[m[32m        $line .= str_repeat('-', $w + 2) . '+';[m
+[32m+[m[32m    }[m
+[32m+[m[32m    echo $line . PHP_EOL;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mfunction drawRow($cols, $widths) {[m
+[32m+[m[32m    $line = '|';[m
+[32m+[m[32m    foreach ($cols as $i => $col) {[m
+[32m+[m[32m        $line .= ' ' . str_pad($col, $widths[$i]) . ' |';[m
+[32m+[m[32m    }[m
+[32m+[m[32m    echo $line . PHP_EOL;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mfunction drawTitle($title, $totalWidth) {[m
+[32m+[m[32m    echo str_repeat('=', $totalWidth) . PHP_EOL;[m
+[32m+[m[32m    echo str_pad($title, $totalWidth, ' ', STR_PAD_BOTH) . PHP_EOL;[m
+[32m+[m[32m    echo str_repeat('=', $totalWidth) . PHP_EOL;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m$widths = [8, 8];[m
+[32m+[m[32m$totalWidth = array_sum($widths) + count($widths) * 3 + 1;[m
+[32m+[m
+[32m+[m[32mdrawTitle('Access Log 分析结果', $totalWidth);[m
+[32m+[m[32mecho PHP_EOL;[m
+[32m+[m
+[32m+[m[32mdrawBorder($widths);[m
+[32m+[m[32mdrawRow(['总请求数', $totalRequests], $widths);[m
+[32m+[m[32mdrawBorder($widths);[m
+[32m+[m
+[32m+[m[32mecho PHP_EOL;[m
+[32m+[m
+[32m+[m[32m$codeWidths = [8, 8];[m
+[32m+[m[32m$codeTotalWidth = array_sum($codeWidths) + count($codeWidths) * 3 + 1;[m
+[32m+[m
+[32m+[m[32mdrawTitle('状态码统计', $codeTotalWidth);[m
+[32m+[m[32mecho PHP_EOL;[m
+[32m+[m
+[32m+[m[32mdrawBorder($codeWidths);[m
+[32m+[m[32mdrawRow(['状态码', '数量'], $codeWidths);[m
+[32m+[m[32mdrawBorder($codeWidths);[m
+[32m+[m
+[32m+[m[32mforeach ($statusCodes as $code => $count) {[m
+[32m+[m[32m    drawRow([$code, $count], $codeWidths);[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mdrawBorder($codeWidths);[m
+[32m+[m
+[32m+[m[32mecho PHP_EOL;[m
+[32m+[m
+[32m+[m[32m$ipWidths = [20, 8];[m
+[32m+[m[32m$ipTotalWidth = array_sum($ipWidths) + count($ipWidths) * 3 + 1;[m
+[32m+[m
+[32m+[m[32mdrawTitle('访问量 Top 10 IP', $ipTotalWidth);[m
+[32m+[m[32mecho PHP_EOL;[m
+[32m+[m
+[32m+[m[32mdrawBorder($ipWidths);[m
+[32m+[m[32mdrawRow(['IP 地址', '访问次数'], $ipWidths);[m
+[32m+[m[32mdrawBorder($ipWidths);[m
+[32m+[m
+[32m+[m[32m$rank = 1;[m
+[32m+[m[32mforeach ($topIps as $ip => $count) {[m
+[32m+[m[32m    drawRow([$rank . '. ' . $ip, $count], $ipWidths);[m
+[32m+[m[32m    $rank++;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mdrawBorder($ipWidths);[m
+[32m+[m
+[32m+[m[32mecho PHP_EOL;[m

@@ -1,0 +1,5 @@
+{
+    "log_type": "nginx",
+    "log_file": "access.log",
+    "top_n": 10
+}

@@ -1,27 +1,49 @@
 <?php
 
-/**
- * Nginx access.log 分析工具
- * 用法: php analyze.php [access.log 路径]
- * 默认读取当前目录下的 access.log
- */
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'LogParserInterface.php';
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'NginxParser.php';
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'ApacheParser.php';
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'JsonlParser.php';
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'LogParserFactory.php';
 
-$logFile = $argv[1] ?? __DIR__ . DIRECTORY_SEPARATOR . 'access.log';
+$configPath = __DIR__ . DIRECTORY_SEPARATOR . 'config.json';
+
+if (!file_exists($configPath)) {
+    fwrite(STDERR, "错误: 配置文件不存在: {$configPath}\n");
+    exit(1);
+}
+
+$config = json_decode(file_get_contents($configPath), true);
+if ($config === null) {
+    fwrite(STDERR, "错误: 配置文件 JSON 格式无效\n");
+    exit(1);
+}
+
+$logType = $config['log_type'] ?? 'nginx';
+$logFile = $config['log_file'] ?? __DIR__ . DIRECTORY_SEPARATOR . 'access.log';
+$topN = $config['top_n'] ?? 10;
 
 if (!file_exists($logFile)) {
     fwrite(STDERR, "错误: 日志文件不存在: {$logFile}\n");
     exit(1);
 }
 
-$totalRequests = 0;
-$statusCodes = [];
-$ipCounts = [];
+try {
+    $parser = LogParserFactory::create($logType);
+} catch (InvalidArgumentException $e) {
+    fwrite(STDERR, "错误: " . $e->getMessage() . "\n");
+    exit(1);
+}
 
 $handle = fopen($logFile, 'r');
 if (!$handle) {
     fwrite(STDERR, "错误: 无法打开文件: {$logFile}\n");
     exit(1);
 }
+
+$totalRequests = 0;
+$statusCodes = [];
+$ipCounts = [];
 
 while (($line = fgets($handle)) !== false) {
     $line = trim($line);
@@ -31,10 +53,10 @@ while (($line = fgets($handle)) !== false) {
 
     $totalRequests++;
 
-    $matches = [];
-    if (preg_match('/^(\S+)\s+.*?"\S+\s+\S+\s+\S+"\s+(\d{3})\s+/', $line, $matches)) {
-        $ip = $matches[1];
-        $status = (int)$matches[2];
+    $result = $parser->parseLine($line);
+    if ($result !== null) {
+        $ip = $result['ip'];
+        $status = $result['status'];
 
         if (!isset($statusCodes[$status])) {
             $statusCodes[$status] = 0;
@@ -51,7 +73,7 @@ while (($line = fgets($handle)) !== false) {
 fclose($handle);
 
 arsort($ipCounts);
-$topIps = array_slice($ipCounts, 0, 10, true);
+$topIps = array_slice($ipCounts, 0, $topN, true);
 
 function drawBorder($widths) {
     $line = '+';
@@ -108,7 +130,7 @@ echo PHP_EOL;
 $ipWidths = [20, 8];
 $ipTotalWidth = array_sum($ipWidths) + count($ipWidths) * 3 + 1;
 
-drawTitle('访问量 Top 10 IP', $ipTotalWidth);
+drawTitle('访问量 Top ' . $topN . ' IP', $ipTotalWidth);
 echo PHP_EOL;
 
 drawBorder($ipWidths);
